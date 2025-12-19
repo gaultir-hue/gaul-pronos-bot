@@ -3,7 +3,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 import os
 
 # Token récupéré depuis Render
-TOKEN = os.environ.get("8279478933:AAEav__sB6gHJrLroSETQwrGBJbKCnL53Q0")
+TOKEN = os.environ.get("8279478933:AAHOeIy3Uy2XsCVme_WAoj4ZvH6KaTGWWIE")
 
 # 🔐 TON ID TELEGRAM (ADMIN)
 ADMIN_ID = 2102675933
