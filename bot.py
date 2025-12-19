@@ -2,9 +2,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import os
 
-# Token récupéré depuis Render
+# ===== CONFIG =====
 TOKEN = os.environ.get("BOT_TOKEN")
-# 🔐 TON ID TELEGRAM (ADMIN)
 ADMIN_ID = 2102675933
 
 abonnes = set()
@@ -22,22 +21,31 @@ async def show_menu(message):
         )]
     ]
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
     await message.reply_text(
-        "🏠 MENU PRINCIPAL\n\n"
-        "👇 Choisis une option :",
-        reply_markup=reply_markup
+        "🏠 MENU PRINCIPAL\n\n👇 Choisis une option :",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 # ===== START =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
     abonnes.add(user_id)
-
     await show_menu(update.message)
 
-# ===== NOTIFICATION ADMIN =====
+# ===== STATS (ADMIN ONLY) =====
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("⛔ Accès refusé.")
+        return
+
+    await update.message.reply_text(
+        "📊 STATISTIQUES – GAUL PRONOS\n\n"
+        f"👥 Abonnés : {len(abonnes)}\n"
+        "🔔 Notifications : activables\n"
+        "🟢 Bot : en ligne"
+    )
+
+# ===== NOTIFICATION (ADMIN ONLY) =====
 async def notify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -68,45 +76,41 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             with open(chemin, "r", encoding="utf-8") as f:
                 texte = f.read().strip()
-        except Exception:
-            texte = (
-                "❌ FICHIER INTROUVABLE\n\n"
-                f"Chemin attendu :\n{chemin}\n\n"
-                "➡️ Vérifie que analyses.txt est bien dans le même dossier que bot.py"
-            )
+        except:
+            texte = "⏳ Analyses en cours de mise à jour."
 
         if not texte:
             texte = "⏳ Analyses vides pour le moment."
 
-        keyboard = [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        await query.message.reply_text(texte, reply_markup=reply_markup)
+        await query.message.reply_text(
+            texte,
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
+            )
+        )
 
     # ----- PREMIER LEAGUE -----
     elif query.data == "pl":
-        keyboard = [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
         await query.message.reply_text(
             "⚽ PREMIER LEAGUE\n\n"
             "• Over 2.5\n"
             "• BTTS\n"
             "• Victoires à domicile",
-            reply_markup=reply_markup
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
+            )
         )
 
     # ----- LA LIGA -----
     elif query.data == "liga":
-        keyboard = [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
         await query.message.reply_text(
             "🇪🇸 LA LIGA\n\n"
             "• Over 1.5\n"
             "• Under 3.5\n"
             "• Matchs tactiques",
-            reply_markup=reply_markup
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
+            )
         )
 
     # ----- BONUS -----
@@ -127,13 +131,11 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]
         ]
 
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
         await query.message.reply_text(
             "🎁 BONUS EXCLUSIFS BOOKMAKERS\n\n"
             "💰 Jusqu’à 200% de bonus\n"
             "🎟️ Code promo : 4CPR",
-            reply_markup=reply_markup
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
     # ----- MENU -----
@@ -143,6 +145,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===== APP =====
 app = Application.builder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("stats", stats))
 app.add_handler(CommandHandler("notify", notify))
 app.add_handler(CallbackQueryHandler(buttons))
 
