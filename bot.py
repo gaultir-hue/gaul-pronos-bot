@@ -2,9 +2,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import os
 
+# Token récupéré depuis Render
 TOKEN = os.environ.get("8279478933:AAEav__sB6gHJrLroSETQwrGBJbKCnL53Q0")
 
-# 🔐 METS ICI TON ID TELEGRAM
+# 🔐 TON ID TELEGRAM (ADMIN)
 ADMIN_ID = 2102675933
 
 abonnes = set()
@@ -122,7 +123,7 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )],
             [InlineKeyboardButton(
                 "🎁 BETWINNER – Bonus 200%",
-                url="https://bwredir.com/293V?p=%2Fregistration%2F"
+                url="https://betwinner2.com/fr/registration?btag=d_46129m_419562c_bw_KT9AsFLZq3FWBBy768bZMV"
             )],
             [InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]
         ]
