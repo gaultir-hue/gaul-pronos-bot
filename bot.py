@@ -24,6 +24,7 @@ def save_abonne(user_id):
 # ===== MENU PRINCIPAL =====
 async def show_menu(message):
     keyboard = [
+        [InlineKeyboardButton("🔐 TOP 3 SAFE", callback_data="safe")],
         [InlineKeyboardButton("📊 Analyses du jour", callback_data="analyses")],
         [InlineKeyboardButton("⚽ Premier League", callback_data="pl")],
         [InlineKeyboardButton("🇪🇸 La Liga", callback_data="liga")],
@@ -45,7 +46,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_abonne(user_id)
     await show_menu(update.message)
 
-# ===== STATS (ADMIN ONLY) =====
+# ===== STATS (ADMIN) =====
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("⛔ Accès refusé.")
@@ -54,21 +55,19 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📊 STATISTIQUES – GAUL PRONOS\n\n"
         f"👥 Abonnés : {len(abonnes)}\n"
-        "🔔 Notifications : activables\n"
         "🟢 Bot : en ligne"
     )
 
-# ===== NOTIFY (ADMIN ONLY) =====
+# ===== NOTIFY (ADMIN) =====
 async def notify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
     message = (
-        "🔔 NOUVELLES ANALYSES DISPONIBLES 🔔\n\n"
-        "📊 Les matchs du jour sont en ligne\n"
-        "⚽ Sélections claires et rapides\n"
-        "🎯 Approche prudente\n\n"
-        "👉 Ouvre le bot et clique sur « Analyses du jour »"
+        "🔔 NOUVEAU TOP 3 SAFE DISPONIBLE 🔔\n\n"
+        "🔐 Sélections prudentes du jour\n"
+        "🎯 Gestion du risque recommandée\n\n"
+        "👉 Ouvre le bot et clique sur « TOP 3 SAFE »"
     )
 
     for user_id in abonnes:
@@ -82,8 +81,26 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    # ----- TOP 3 SAFE -----
+    if query.data == "safe":
+        try:
+            with open("safe.txt", "r", encoding="utf-8") as f:
+                texte = f.read().strip()
+        except Exception:
+            texte = "⏳ TOP 3 SAFE en cours de mise à jour."
+
+        if not texte:
+            texte = "⏳ TOP 3 SAFE non disponible."
+
+        await query.message.reply_text(
+            texte,
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
+            )
+        )
+
     # ----- ANALYSES -----
-    if query.data == "analyses":
+    elif query.data == "analyses":
         try:
             with open("analyses.txt", "r", encoding="utf-8") as f:
                 texte = f.read().strip()
@@ -124,25 +141,13 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         )
 
-    # ----- BONUS BOOKMAKERS -----
+    # ----- BONUS -----
     elif query.data == "bonus":
         keyboard = [
-            [InlineKeyboardButton(
-                "🎁 1XBET – Bonus de bienvenue",
-                url="https://bit.ly/4p0ahuw"
-            )],
-            [InlineKeyboardButton(
-                "🎁 COLDBET – Bonus 200%",
-                url="http://coldredir.com/L?tag=d_5024553m_126632c_&site=5024553&ad=126632"
-            )],
-            [InlineKeyboardButton(
-                "🎁 MELBET – Code 4CPR",
-                url="https://refpa3665.com/L?tag=d_3939722m_66335c_&site=3939722&ad=66335"
-            )],
-            [InlineKeyboardButton(
-                "🎁 BETWINNER – Bonus 200%",
-                url="https://betwinner2.com/fr/registration?btag=d_46129m_419562c_bw_KT9AsFLZq3FWBBy768bZMV"
-            )],
+            [InlineKeyboardButton("🎁 1XBET – Bonus", url="https://bit.ly/4p0ahuw")],
+            [InlineKeyboardButton("🎁 COLDBET – Bonus 200%", url="http://coldredir.com/L?tag=d_5024553m_126632c_&site=5024553&ad=126632")],
+            [InlineKeyboardButton("🎁 MELBET – Code 4CPR", url="https://refpa3665.com/L?tag=d_3939722m_66335c_&site=3939722&ad=66335")],
+            [InlineKeyboardButton("🎁 BETWINNER – Bonus 200%", url="https://betwinner2.com/fr/registration?btag=d_46129m_419562c_bw_KT9AsFLZq3FWBBy768bZMV")],
             [InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]
         ]
 
