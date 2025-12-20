@@ -1,31 +1,52 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import os
+import sqlite3
+from datetime import datetime, timedelta
 
 # ===== CONFIG =====
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = 2102675933
-ABONNES_FILE = "abonnes.txt"
+DB_PATH = "data.db"
 
-# ===== CHARGER LES ABONNÉS =====
-abonnes = set()
-if os.path.exists(ABONNES_FILE):
-    with open(ABONNES_FILE, "r", encoding="utf-8") as f:
-        for line in f:
-            abonnes.add(int(line.strip()))
+# ===== INIT DB =====
+conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+cursor = conn.cursor()
 
-# ===== SAUVEGARDER UN ABONNÉ =====
-def save_abonne(user_id):
-    if user_id not in abonnes:
-        abonnes.add(user_id)
-        with open(ABONNES_FILE, "a", encoding="utf-8") as f:
-            f.write(f"{user_id}\n")
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY,
+    first_seen TEXT,
+    last_seen TEXT
+)
+""")
+conn.commit()
 
-# ===== MENU PRINCIPAL =====
+# ===== USER TRACKING =====
+def track_user(user_id: int):
+    now = datetime.utcnow().isoformat()
+
+    cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    exists = cursor.fetchone()
+
+    if exists:
+        cursor.execute(
+            "UPDATE users SET last_seen = ? WHERE user_id = ?",
+            (now, user_id)
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO users (user_id, first_seen, last_seen) VALUES (?, ?, ?)",
+            (user_id, now, now)
+        )
+
+    conn.commit()
+
+# ===== MENU =====
 async def show_menu(message):
     keyboard = [
-        [InlineKeyboardButton("🔐 TOP 3 SAFE", callback_data="safe")],
         [InlineKeyboardButton("📊 Analyses du jour", callback_data="analyses")],
+        [InlineKeyboardButton("🔐 TOP 3 SAFE", callback_data="safe")],
         [InlineKeyboardButton("⚽ Premier League", callback_data="pl")],
         [InlineKeyboardButton("🇪🇸 La Liga", callback_data="liga")],
         [InlineKeyboardButton("🎁 Bonus Bookmakers", callback_data="bonus")],
@@ -43,7 +64,7 @@ async def show_menu(message):
 # ===== START =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_chat.id
-    save_abonne(user_id)
+    track_user(user_id)
     await show_menu(update.message)
 
 # ===== STATS (ADMIN) =====
@@ -52,9 +73,20 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ Accès refusé.")
         return
 
+    cursor.execute("SELECT COUNT(*) FROM users")
+    total = cursor.fetchone()[0]
+
+    limit_date = (datetime.utcnow() - timedelta(days=30)).isoformat()
+    cursor.execute(
+        "SELECT COUNT(*) FROM users WHERE last_seen >= ?",
+        (limit_date,)
+    )
+    mau = cursor.fetchone()[0]
+
     await update.message.reply_text(
         "📊 STATISTIQUES – GAUL PRONOS\n\n"
-        f"👥 Abonnés : {len(abonnes)}\n"
+        f"👥 Abonnés totaux : {total}\n"
+        f"📆 Actifs (30j) : {mau}\n"
         "🟢 Bot : en ligne"
     )
 
@@ -63,102 +95,75 @@ async def notify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
+    cursor.execute("SELECT user_id FROM users")
+    users = cursor.fetchall()
+
     message = (
-        "🔔 NOUVEAU TOP 3 SAFE DISPONIBLE 🔔\n\n"
-        "🔐 Sélections prudentes du jour\n"
-        "🎯 Gestion du risque recommandée\n\n"
-        "👉 Ouvre le bot et clique sur « TOP 3 SAFE »"
+        "🔔 NOUVELLES ANALYSES DISPONIBLES 🔔\n\n"
+        "🔐 TOP 3 SAFE du jour en ligne\n"
+        "📊 Analyses mises à jour\n\n"
+        "👉 Ouvre le bot maintenant"
     )
 
-    for user_id in abonnes:
+    for (user_id,) in users:
         try:
             await context.bot.send_message(chat_id=user_id, text=message)
         except:
             pass
 
-# ===== BOUTONS =====
+# ===== BUTTONS =====
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    track_user(query.from_user.id)
 
-    # ----- TOP 3 SAFE -----
-    if query.data == "safe":
-        try:
-            with open("safe.txt", "r", encoding="utf-8") as f:
-                texte = f.read().strip()
-        except Exception:
-            texte = "⏳ TOP 3 SAFE en cours de mise à jour."
-
-        if not texte:
-            texte = "⏳ TOP 3 SAFE non disponible."
-
-        await query.message.reply_text(
-            texte,
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
-            )
+    def back():
+        return InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
         )
 
-    # ----- ANALYSES -----
-    elif query.data == "analyses":
+    if query.data == "analyses":
         try:
             with open("analyses.txt", "r", encoding="utf-8") as f:
-                texte = f.read().strip()
-        except Exception:
-            texte = "⏳ Analyses en cours de mise à jour."
+                text = f.read().strip()
+        except:
+            text = "⏳ Analyses en cours de mise à jour."
 
-        if not texte:
-            texte = "⏳ Analyses vides pour le moment."
+        await query.message.reply_text(text, reply_markup=back())
 
-        await query.message.reply_text(
-            texte,
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
-            )
-        )
+    elif query.data == "safe":
+        try:
+            with open("safe.txt", "r", encoding="utf-8") as f:
+                text = f.read().strip()
+        except:
+            text = "⏳ TOP 3 SAFE en préparation."
 
-    # ----- PREMIER LEAGUE -----
+        await query.message.reply_text(text, reply_markup=back())
+
     elif query.data == "pl":
         await query.message.reply_text(
-            "⚽ PREMIER LEAGUE\n\n"
-            "• Over 2.5\n"
-            "• BTTS\n"
-            "• Victoires à domicile",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
-            )
+            "⚽ PREMIER LEAGUE\n\n• Over 2.5\n• BTTS\n• Victoires à domicile",
+            reply_markup=back()
         )
 
-    # ----- LA LIGA -----
     elif query.data == "liga":
         await query.message.reply_text(
-            "🇪🇸 LA LIGA\n\n"
-            "• Over 1.5\n"
-            "• Under 3.5\n"
-            "• Matchs tactiques",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]]
-            )
+            "🇪🇸 LA LIGA\n\n• Over 1.5\n• Under 3.5\n• Matchs tactiques",
+            reply_markup=back()
         )
 
-    # ----- BONUS -----
     elif query.data == "bonus":
         keyboard = [
-            [InlineKeyboardButton("🎁 1XBET – Bonus", url="https://bit.ly/4p0ahuw")],
-            [InlineKeyboardButton("🎁 COLDBET – Bonus 200%", url="http://coldredir.com/L?tag=d_5024553m_126632c_&site=5024553&ad=126632")],
-            [InlineKeyboardButton("🎁 MELBET – Code 4CPR", url="https://refpa3665.com/L?tag=d_3939722m_66335c_&site=3939722&ad=66335")],
-            [InlineKeyboardButton("🎁 BETWINNER – Bonus 200%", url="https://betwinner2.com/fr/registration?btag=d_46129m_419562c_bw_KT9AsFLZq3FWBBy768bZMV")],
+            [InlineKeyboardButton("🎁 1XBET", url="https://bit.ly/4p0ahuw")],
+            [InlineKeyboardButton("🎁 MELBET", url="https://refpa3665.com/L?tag=d_3939722m_66335c_&site=3939722&ad=66335")],
+            [InlineKeyboardButton("🎁 BETWINNER", url="https://betwinner2.com/fr/registration?btag=d_46129m_419562c_bw_KT9AsFLZq3FWBBy768bZMV")],
             [InlineKeyboardButton("🏠 Menu principal", callback_data="menu")]
         ]
-
         await query.message.reply_text(
-            "🎁 BONUS EXCLUSIFS BOOKMAKERS\n\n"
-            "💰 Jusqu’à 200% de bonus\n"
-            "🎟️ Code promo : 4CPR",
+            "🎁 BONUS BOOKMAKERS",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-    # ----- MENU -----
     elif query.data == "menu":
         await show_menu(query.message)
 
